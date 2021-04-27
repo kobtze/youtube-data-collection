@@ -26,16 +26,13 @@ app.get("/", function (req, res) {
     });
 });
 
-let externalApiCallCount = 0;
-
 async function getCommentsTree(videoId, maxResults = 20) {
   // 1. Create empty array
   let rawComments = [];
+  // 2. While loop (collect threads)
   let amountGot = 0;
   let amountNeeded = maxResults;
   let threadsNextPageToken = "";
-  let threadsWithMoreThen5Replies = 0;
-  // 2. While loop (collect threads)
   do {
     let commentThreads = await _getCommentThreads(
       videoId,
@@ -45,30 +42,25 @@ async function getCommentsTree(videoId, maxResults = 20) {
     threadsNextPageToken = commentThreads.nextPageToken
       ? commentThreads.nextPageToken
       : "";
-    amountGot += _countComments(commentThreads.items); // Check 2nd and later occurances
+    amountGot += _countComments(commentThreads.items);
     amountNeeded = maxResults - amountGot;
     try {
       // 3. While loop (collect comments)
-      // if (amountNeeded > 0) { // Add this later on
       await commentThreads.items.forEach(async (el) => {
-        // Iterate over threads
         if (amountNeeded > 0 && el.snippet && el.snippet.totalReplyCount > 5) {
-          threadsWithMoreThen5Replies++;
           let commentsNextPageToken = "";
-          // console.log(el.replies.comments.length, ' comments before: ', el.replies.comments)
           do {
             let comments = await _getComments(
               el.id,
               amountNeeded < 100 ? amountNeeded : 100,
               commentsNextPageToken
-              );
-              // Insert replies into thread
-              el.replies = new Object({ comments: comments.items });
-              // console.log(el.replies.comments.length, ' comments after: ', el.replies.comments)
-              commentsNextPageToken = comments.nextPageToken
+            );
+            // Insert replies into thread (Todo: support threads > 100)
+            el.replies = new Object({ comments: comments.items });
+            commentsNextPageToken = comments.nextPageToken
               ? comments.nextPageToken
               : "";
-              amountGot += _countComments(comments.items) - 5;
+            amountGot += _countComments(comments.items) - 5;
             amountNeeded = maxResults - amountGot;
           } while (amountNeeded > 0 && commentsNextPageToken);
         }
@@ -76,13 +68,11 @@ async function getCommentsTree(videoId, maxResults = 20) {
     } catch (err) {
       console.log(err);
     }
-    // }
+    // Insert threads into array
     rawComments.push(...commentThreads.items);
   } while (amountNeeded > 0 && threadsNextPageToken);
   // 4. Return formatted Comments Obj
   const output = new Comments(videoId, rawComments);
-  console.log("threadsWithMoreThen5Replies: ", threadsWithMoreThen5Replies);
-  console.log("amountGot: ", amountGot);
   return output;
 }
 
@@ -122,21 +112,6 @@ async function _getCommentThreads(videoId, maxResults, pageToken) {
         `key=${credentials.API_KEY}&` +
         pageTokenParam
     );
-    externalApiCallCount++;
-    console.log(
-      "apiCalls: ",
-      externalApiCallCount,
-      "   videoId: ",
-      videoId,
-      "   maxResults: ",
-      maxResults,
-      "   returnedCount: ",
-      res.data.items.length,
-      // "   amountNeeded: ",
-      // amountNeeded,
-      // "   amountGot: ",
-      // amountGot
-    );
     return res.data;
   } catch (err) {
     console.log(err);
@@ -154,21 +129,6 @@ async function _getComments(parentId, maxResults, pageToken) {
         // + `part=snippet,replies&`
         `key=${credentials.API_KEY}&` +
         pageTokenParam
-    );
-    externalApiCallCount++;
-    console.log(
-      "apiCalls: ",
-      externalApiCallCount,
-      "   parentId: ",
-      parentId,
-      "   maxResults: ",
-      maxResults,
-      "   returnedCount: ",
-      res.data.items.length,
-      // "   amountNeeded: ",
-      // amountNeeded,
-      // "   amountGot: ",
-      // amountGot
     );
     return res.data;
   } catch (err) {
